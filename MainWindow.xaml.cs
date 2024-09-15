@@ -19,7 +19,7 @@ namespace dot_picture_generator
         [GeneratedRegex("[^0-9]+")]
         public static partial Regex regex();
 
-        private int imageheight = 1137;
+        private int imageheight = 100;
 
         public int ImageHeight
         {
@@ -38,7 +38,7 @@ namespace dot_picture_generator
             }
         }
 
-        private int imagewidth = 639;
+        private int imagewidth = 100;
 
         public int ImageWidth
         {
@@ -57,22 +57,6 @@ namespace dot_picture_generator
             }
         }
 
-        private string dotwords = string.Empty;
-
-        public string DotWords
-        {
-            get { return dotwords; }
-            set 
-            {
-                if (dotwords != value)
-                {
-                    dotwords = value;
-                    OnPropertyChanged(nameof(DotWords));
-                }
-                else WaitingForPrinting = false;
-            }
-        }
-
         private string NowPath;
 
         private bool isbtnsenabled = true;
@@ -87,14 +71,27 @@ namespace dot_picture_generator
             }
         }
 
-        private ImageGenerator4x4 generator;
+        private Generator generator;
+
+        private bool iStbt;
+
+        public bool Istbt
+        {
+            get { return iStbt; }
+            set 
+            {
+                iStbt = value;
+                OnPropertyChanged(nameof(Istbt));
+            }
+        }
 
         private bool WaitingForPrinting = false;
+
+        private Dotword? _dotword;
 
         public MainWindow()
         {
             NowPath = string.Empty;
-            generator = new();
             InitializeComponent();
             DataContext = this;
         }
@@ -108,6 +105,7 @@ namespace dot_picture_generator
 
         private async void ResolutionChangeBtn_Click(object sender, RoutedEventArgs e)
         {
+            if (generator is null) return;
             IsBtnsEnabled = false;
             await generator.SetImageGrayAsync(ImageWidth, ImageHeight * 25 / 19, NowPath);
             ResolutionChangeBtn.Visibility = Visibility.Collapsed;
@@ -116,36 +114,49 @@ namespace dot_picture_generator
 
         private async void AddImageBtn_Click(object sender, RoutedEventArgs e)
         {
+            if (generator is null) return;
             NowPath = OpenFile.Open_File();
             await generator.SetImageGrayAsync(ImageWidth, ImageHeight * 25 / 19, NowPath);
         }
 
         private async void SummonImageBtn_Click(object sender, RoutedEventArgs e)
         {
+            if (generator is null) return;
             IsBtnsEnabled = false;
             WaitingForPrinting = true;
             DateTime starttime = DateTime.Now;
-            string buffer = await generator.BufferToDotWordGrayAsync();
+            _dotword = await generator.BufferToDotWordGrayAsync();
             DateTime endcaltime = DateTime.Now;
-            if (buffer.Length > 10_000_000)
+            if (_dotword is null)
             {
-                DotWords = "Image is too big to display.\nIt'll be downloaded later.";
-                await Task.Delay(2000);
-                await ImageSaver.SaveGrayAsync(buffer);
+                status.Content = "Can't summon dotwords";
+                IsBtnsEnabled = true;
+                return;
+            }
+            if (_dotword.Words.Length <= 10_000_000)
+            {
+                DotWordImageShowGrayTxtBx.Text = _dotword.Words;
+                IsBtnsEnabled = true;
+                status.Content =
+                    $"Cal time: {(endcaltime - starttime).TotalMilliseconds:F3} ms\n";
             }
             else
             {
-                DotWords = buffer;
+                IsBtnsEnabled = true;
+                status.Content =
+                    $"Image is too big to display\nCal time: {(endcaltime - starttime).TotalMilliseconds:F3} ms\n";
             }
-            IsBtnsEnabled = true;
-            status.Content =
-                $"Cal time: {(endcaltime - starttime).TotalMilliseconds:F3} ms\n";
         }
 
         private async void SaveImageBtn_Click(object sender, RoutedEventArgs e)
         {
             IsBtnsEnabled = false;
-            await ImageSaver.SaveGrayAsync(DotWords);
+            if (_dotword is null)
+            {
+                IsBtnsEnabled = true;
+                return;
+            }
+            ImageSaver.SaveGrayAsync2(_dotword, new(imagewidth, imageheight));
             IsBtnsEnabled = true;
         }
 
@@ -160,6 +171,28 @@ namespace dot_picture_generator
             {
                 DotWordImageShowGrayTxtBx.Focus();
             }
+        }
+
+        private void tbt_Checked(object sender, RoutedEventArgs e)
+        {
+            if (generator is not null)
+            {
+                BufferInfo info = generator.BufferInfo;
+                generator = new ImageGenerator2x2(info);
+            }
+            else generator = new ImageGenerator2x2(null);
+            fbf.IsChecked = false;
+        }
+
+        private void fbf_Checked(object sender, RoutedEventArgs e)
+        {
+            if (generator is not null)
+            {
+                BufferInfo info = generator.BufferInfo;
+                generator = new ImageGenerator4x4(info);
+            }
+            else generator = new ImageGenerator4x4(null);
+            tbt.IsChecked = false;
         }
     }
 }

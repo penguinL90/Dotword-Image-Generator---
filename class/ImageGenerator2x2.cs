@@ -3,7 +3,7 @@ using System.Windows.Media;
 
 namespace dot_picture_generator.Class
 {
-    internal class ImageGenerator2x2
+    internal class ImageGenerator2x2 : Generator
     {
 
 		private string path = string.Empty;
@@ -24,20 +24,22 @@ namespace dot_picture_generator.Class
         }
 
 
-        private byte[] Buffer;
-		private int BufferWidth;
-		private int BufferHeight;
+        public BufferInfo BufferInfo { get; set; }
         private bool IsFullColor;
 
 		public Status NowStatus { get; set; }
 
-		public ImageGenerator2x2()
+		public ImageGenerator2x2(BufferInfo? info)
 		{
+            if (info is not null)
+            {
+                BufferInfo = info;
+            }
 			NowStatus = Status.Ready;
             ColorPriority = new(6, 2, 4, 7);
 		}
 
-		public Task SetImageGrayAsync(int width, int height, string path)
+        public Task SetImageGrayAsync(int width, int height, string path)
 		{
 			return Task.Run(() =>
 			{
@@ -49,11 +51,9 @@ namespace dot_picture_generator.Class
                 }
 
                 IsFullColor = false;
-                BufferWidth = width;
-                BufferHeight = height;
                 Path = path;
 
-                Buffer = new byte[width * height];
+                byte[] buffer = new byte[width * height];
                 BitmapImage bitmapImage = new();
 
                 bitmapImage.BeginInit();
@@ -63,7 +63,9 @@ namespace dot_picture_generator.Class
                 bitmapImage.EndInit();
 
                 FormatConvertedBitmap convertedBitmap = new(bitmapImage, PixelFormats.Gray8, null, 0);
-                convertedBitmap.CopyPixels(Buffer, width, 0);
+                convertedBitmap.CopyPixels(buffer, width, 0);
+
+                BufferInfo = new(buffer, width, height);
 
                 NowStatus = Status.CompletedToBuffer;
             });
@@ -81,11 +83,11 @@ namespace dot_picture_generator.Class
                 }
 
                 IsFullColor = true;
-                BufferWidth = width;
-                BufferHeight = height;
+                BufferInfo.Width = width;
+                BufferInfo.Height = height;
                 Path = path;
 
-                Buffer = new byte[width * height * 3];
+                byte[] buffer = new byte[width * height * 3];
                 BitmapImage bitmapImage = new();
 
                 bitmapImage.BeginInit();
@@ -95,35 +97,37 @@ namespace dot_picture_generator.Class
                 bitmapImage.EndInit();
 
                 FormatConvertedBitmap convertedBitmap = new(bitmapImage, PixelFormats.Rgb24, null, 0);
-                convertedBitmap.CopyPixels(Buffer, width * 3, 0);
+                convertedBitmap.CopyPixels(buffer, width * 3, 0);
+
+                BufferInfo = new(buffer, width, height);
 
                 NowStatus = Status.CompletedToBuffer;
             });
         }
 
-        public Task<string> BufferToDotWordGrayAsync()
+        public Task<Dotword?> BufferToDotWordGrayAsync()
 		{
 			return Task.Run(() =>
 			{
-                if (Buffer == null || IsFullColor)
+                if (BufferInfo?.Buffer == null || IsFullColor)
                 {
                     NowStatus = Status.Failed;
-                    return Task.FromResult("Can't Summon Dot Word Image.");
+                    return Task.FromResult<Dotword?>(null);
                 }
                 while (NowStatus == Status.ConvertingToBuffer) ;
                 NowStatus = Status.ConvertingToDotWord;
 
-                List<byte[][]> ChunkedList = Enumerable.Chunk(Enumerable.Chunk(Buffer, BufferWidth), 2).ToList();
+                List<byte[][]> ChunkedList = Enumerable.Chunk(Enumerable.Chunk(BufferInfo.Buffer, BufferInfo.Width), 2).ToList();
 
-                char[] OutCharArray = new char[ChunkedList.Count * (BufferWidth + 1)];
+                char[] OutCharArray = new char[ChunkedList.Count * (BufferInfo.Width + 1)];
 
                 Parallel.For(0, ChunkedList.Count, index =>
                 {
                     byte[][] bufferbyte = ChunkedList[index];
-                    char[] bufferchar = new char[BufferWidth + 1];
+                    char[] bufferchar = new char[BufferInfo.Width + 1];
                     int height = bufferbyte.Length;
                     byte[] unit = new byte[height];
-                    for (int i = 0; i < BufferWidth; i++)
+                    for (int i = 0; i < BufferInfo.Width; i++)
                     {
                         Array.Fill<byte>(unit, 255);
                         for (int j = 0; j < height; j++)
@@ -133,10 +137,10 @@ namespace dot_picture_generator.Class
                         bufferchar[i] = UnitToDotWord(unit, height);
                     }
                     bufferchar[^1] = '\n';
-                    Array.Copy(bufferchar, 0, OutCharArray, index * (BufferWidth + 1), BufferWidth + 1);
+                    Array.Copy(bufferchar, 0, OutCharArray, index * (BufferInfo.Width + 1), BufferInfo.Width + 1);
                 });
                 NowStatus = Status.Completed;
-                return Task.FromResult(string.Join("", OutCharArray));
+                return Task.FromResult<Dotword?>(new Dotword(string.Join("", OutCharArray), DotwordType.TwoByTwo, BufferInfo.Height, BufferInfo.Width));
             });
 		}
 
@@ -144,7 +148,7 @@ namespace dot_picture_generator.Class
         {
             return Task.Run(() =>
             {
-                if (Buffer == null || !IsFullColor)
+                if (BufferInfo?.Buffer == null || !IsFullColor)
                 {
                     NowStatus = Status.Failed;
                     return Task.FromResult<List<string>>(["Can't Summon Dot Word Image.", "Can't Summon Dot Word Image.", "Can't Summon Dot Word Image."]);
@@ -152,24 +156,24 @@ namespace dot_picture_generator.Class
                 while (NowStatus == Status.ConvertingToBuffer) ;
                 NowStatus = Status.ConvertingToDotWord;
 
-                List<byte[][]> ChunkedList = Enumerable.Chunk(Enumerable.Chunk(Buffer, BufferWidth * 3), 2).ToList();
+                List<byte[][]> ChunkedList = Enumerable.Chunk(Enumerable.Chunk(BufferInfo.Buffer, BufferInfo.Width * 3), 2).ToList();
 
-                char[] OutCharArray_R = new char[ChunkedList.Count * (BufferWidth + 1)];
-                char[] OutCharArray_G = new char[ChunkedList.Count * (BufferWidth + 1)];
-                char[] OutCharArray_B = new char[ChunkedList.Count * (BufferWidth + 1)];
+                char[] OutCharArray_R = new char[ChunkedList.Count * (BufferInfo.Width + 1)];
+                char[] OutCharArray_G = new char[ChunkedList.Count * (BufferInfo.Width + 1)];
+                char[] OutCharArray_B = new char[ChunkedList.Count * (BufferInfo.Width + 1)];
 
                 Parallel.For(0, ChunkedList.Count, index =>
                 {
                     byte[][] bufferbyte = ChunkedList[index];
                     char[][] bufferchar =
                     [
-                        new char[BufferWidth + 1],
-                        new char[BufferWidth + 1],
-                        new char[BufferWidth + 1],
+                        new char[BufferInfo.Width + 1],
+                        new char[BufferInfo.Width + 1],
+                        new char[BufferInfo.Width + 1],
                     ];
                     int height = bufferbyte.Length;
                     byte[] unit = new byte[height];
-                    for (int i = 0; i < BufferWidth * 3; i += 3)
+                    for (int i = 0; i < BufferInfo.Width * 3; i += 3)
                     {
                         for (int x = 0; x < 3; x++)
                         {
@@ -184,9 +188,9 @@ namespace dot_picture_generator.Class
                     bufferchar[0][^1] = '\n';
                     bufferchar[1][^1] = '\n';
                     bufferchar[2][^1] = '\n';
-                    Array.Copy(bufferchar[0], 0, OutCharArray_R, index * (BufferWidth + 1), BufferWidth + 1);
-                    Array.Copy(bufferchar[1], 0, OutCharArray_G, index * (BufferWidth + 1), BufferWidth + 1);
-                    Array.Copy(bufferchar[2], 0, OutCharArray_B, index * (BufferWidth + 1), BufferWidth + 1);
+                    Array.Copy(bufferchar[0], 0, OutCharArray_R, index * (BufferInfo.Width + 1), BufferInfo.Width + 1);
+                    Array.Copy(bufferchar[1], 0, OutCharArray_G, index * (BufferInfo.Width + 1), BufferInfo.Width + 1);
+                    Array.Copy(bufferchar[2], 0, OutCharArray_B, index * (BufferInfo.Width + 1), BufferInfo.Width + 1);
                 });
                 NowStatus = Status.Completed;
                 return Task.FromResult<List<string>>([string.Join("", OutCharArray_R), string.Join("", OutCharArray_G), string.Join("", OutCharArray_B)]);

@@ -1,7 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Controls;
@@ -12,6 +15,7 @@ namespace dot_picture_generator.Class
 {
     internal static class ImageSaver
     {
+        [Obsolete]
         public static Task SaveGrayAsync(string data, int width = 4032, int height = 3024)
         {
             return Task.Run(() =>
@@ -70,6 +74,78 @@ namespace dot_picture_generator.Class
             });
         }
 
+        public static void SaveGrayAsync2(Dotword words, ImageSaveOptions options)
+        {
+            double height;
+            double width;
+            if (words.Type == DotwordType.TwoByTwo)
+            {
+                height = options.Height * 4.63 + 207.12;
+                width = options.Width * 4.52 + 200;
+            }
+            else if (words.Type == DotwordType.FourByFour)
+            {
+                height = options.Height * 9.25 + 201.32;
+                width = options.Width * 9.94 + 200;
+            }
+            else return;
+            string path = OpenPath();
+            if (path is "") return;
+            DrawingVisual drawingVisual = new();
+            DrawingContext drawingContext = drawingVisual.RenderOpen();
+            FormattedText text = new(
+                words.Words,
+                CultureInfo.CurrentCulture,
+                System.Windows.FlowDirection.LeftToRight,
+                new(new("Consolas"),
+                    System.Windows.FontStyles.Normal,
+                    System.Windows.FontWeights.Normal,
+                    System.Windows.FontStretches.Normal),
+                6,
+                Brushes.Black, 1);
+            drawingContext.DrawText(text, new(100, 100));
+            drawingContext.Close();
+
+            RenderTargetBitmap render = new((int)width, (int)height, 96, 96, PixelFormats.Default);
+            PngBitmapEncoder encoder = new();
+
+            render.Render(drawingVisual);
+            encoder.Frames.Add(BitmapFrame.Create(render));
+            using (Stream stream = File.Create(path))
+            {
+                encoder.Save(stream);
+            }
+        }
+
+        [Obsolete]
+        public static void SaveGrayAsync4x4(string data, ImageSaveOptions options)
+        {
+            double height = options.Height * 9.25 + 201.32;
+            double width = options.Width * 9.94 + 200;
+            TextBlock textBlock = new()
+            {
+                Text = data,
+                VerticalAlignment = System.Windows.VerticalAlignment.Center,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                Margin = new System.Windows.Thickness(100),
+                FontSize = 6,
+                FontFamily = new("Consolas"),
+                Visibility = System.Windows.Visibility.Visible,
+                Width = width,
+                Height = height,
+                TextAlignment = System.Windows.TextAlignment.Center,
+            };
+            textBlock.Arrange(new(0, 0, width, height));
+
+            string path = OpenPath();
+            RenderTargetBitmap render = new((int)width, (int)height, 96, 96, PixelFormats.Default);
+            using Stream stream = File.Create(path);
+            render.Render(textBlock);
+            PngBitmapEncoder encoder = new();
+            encoder.Frames.Add(BitmapFrame.Create(render));
+            encoder.Save(stream);
+            stream.Close();
+        }
 
         /// <summary>
         /// Not implemented well, Please don't use this api.
@@ -229,4 +305,6 @@ namespace dot_picture_generator.Class
             return Path + $"\\{DateTime.UtcNow.ToFileTimeUtc()}.png";
         }
     }
+
+    internal record class ImageSaveOptions(int Width, int Height);
 }

@@ -27,7 +27,6 @@
             <TextBox x:Name="DotWordImageShowGrayTxtBx"
                      Background="Transparent"
                      BorderThickness="0"
-                     Text="{Binding DotWords}"
                      FontStretch="Medium"
                      FontWeight="Black"
                      FontFamily="Consolas"
@@ -163,6 +162,32 @@
                                FontFamily="Consolas"/>
                 </Viewbox>
             </Button>
+
+            <StackPanel Orientation="Horizontal"
+                        Margin="10"
+                        VerticalAlignment="Center">
+
+                    <RadioButton
+                        x:Name="tbt"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Content="2x2"
+                        Checked="tbt_Checked"
+                        TextBlock.FontFamily="Consolas"
+                        Margin="10"
+                        IsThreeState="False"/>
+                    <RadioButton
+                        x:Name="fbf"
+                        VerticalAlignment="Center"
+                        HorizontalAlignment="Center"
+                        Content="4x4"
+                        Checked="fbf_Checked"
+                        TextBlock.FontFamily="Consolas"
+                        Margin="10"
+                        IsThreeState="False"/>
+
+                </StackPanel>
+
         </StackPanel>
 
         <StackPanel Grid.Row="1"
